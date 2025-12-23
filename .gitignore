@@ -1,0 +1,57 @@
+# --- System Files ---
+.DS_Store
+Thumbs.db
+*.log
+logs
+*.gz
+
+# --- Dependencies ---
+# Never check in node_modules
+node_modules/
+jspm_packages/
+
+# --- Environment & Security ---
+# Crucial: Prevent leaking secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.sample
+!.env.example
+
+# --- Build & Distribution ---
+dist/
+build/
+out/
+.cache/
+.parcel-cache/
+
+# --- Testing ---
+coverage/
+.nyc_output/
+
+# --- IDE / Editors ---
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Database ---
+# If using local SQLite or similar
+*.db
+*.sqlite
+
+# --- Documentation ---
+# If you generate API docs locally
+doc/
+jsdoc/
+
+# --- Deployment ---
+.vercel
+.netlify
+.serverless/

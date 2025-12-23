@@ -1,23 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const mongoose = require("mongoose");
-
-
+// We don't need a Receipt model because we use Invoice with a filter
 const Client = require("../models/client");
 const Quotation = require("../models/quotation");
 const Invoice = require("../models/invoice");
 
 router.get("/stats", async (req, res) => {
   try {
-  
-    const [clients, quotations, invoices] = await Promise.all([
+    // We destructure 4 variables to match the 4 count requests
+    const [clients, quotations, invoices, receipts] = await Promise.all([
       Client.countDocuments({}),
       Quotation.countDocuments({}),
-      Invoice.countDocuments({}),
-      Receipt.countDocuments({ status: "Paid" }), // Example filter
+      Invoice.countDocuments({}),                 // Total count
+      Invoice.countDocuments({ status: "Paid" }), // Filtered count for receipts ✅
     ]);
 
-   
     res.json({
       clients,
       quotations,

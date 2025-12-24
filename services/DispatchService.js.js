@@ -14,24 +14,28 @@ class DispatchService {
         this.logoPath = path.join(__dirname, '../../assets/logo.png');
         
         this.transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT) || 587,
-            // Automatically sets secure: true for 465, false for 587
-            secure: Number(process.env.SMTP_PORT) === 465, 
-            pool: true,
-            maxConnections: 3, 
-            socketTimeout: 60000, 
-            connectionTimeout: 60000,
-            greetingTimeout: 60000,
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASS
-            },
-            tls: { 
-                rejectUnauthorized: false,
-                minVersion: 'TLSv1.2' 
-            }
-        });
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT) || 587,
+   
+    secure: Number(process.env.SMTP_PORT) === 465, 
+    
+
+    family: 4, 
+    
+    pool: true,
+    maxConnections: 3, 
+    socketTimeout: 60000, 
+    connectionTimeout: 60000,
+    greetingTimeout: 60000,
+    auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS
+    },
+    tls: { 
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2' 
+    }
+});
 
         this.initStorage();
     }

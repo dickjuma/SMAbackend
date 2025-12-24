@@ -21,7 +21,7 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// 🔍 Automatic health check on startup
+
 transporter.verify((error) => {
     if (error) {
         console.error(" MAILER_SYSTEM_OFFLINE:", error.message);

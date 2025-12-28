@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const { google } = require('googleapis'); // npm install googleapis
 const path = require('path');
 const fs = require('fs');
 const html_to_pdf = require('html-pdf-node');
@@ -9,35 +10,45 @@ const Service = require('../models/service');
 
 class DispatchService {
     constructor() {
-     
         this.baseDir = path.join(__dirname, '../../uploads');
         this.logoPath = path.join(__dirname, '../../assets/logo.png');
-        
-        this.transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT) || 587,
-   
-    secure: Number(process.env.SMTP_PORT) === 465, 
-    
 
-    family: 4, 
-    
-    pool: true,
-    maxConnections: 3, 
-    socketTimeout: 60000, 
-    connectionTimeout: 60000,
-    greetingTimeout: 60000,
-    auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-    },
-    tls: { 
-        rejectUnauthorized: false,
-        minVersion: 'TLSv1.2' 
-    }
-});
+        // Setup OAuth2 Client
+        this.oauth2Client = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            "https://developers.google.com/oauthplayground"
+        );
+
+        this.oauth2Client.setCredentials({
+            refresh_token: process.env.GOOGLE_REFRESH_TOKEN
+        });
 
         this.initStorage();
+    }
+
+    // Helper to get an active transporter with a fresh token
+    async getTransporter() {
+        try {
+            const { token } = await this.oauth2Client.getAccessToken();
+            
+            return nodemailer.createTransport({
+                service: 'gmail',
+                pool: true, // Optimizes for bulk
+                maxConnections: 5,
+                auth: {
+                    type: 'OAuth2',
+                    user: process.env.SMTP_USER,
+                    clientId: process.env.GOOGLE_CLIENT_ID,
+                    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+                    refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+                    accessToken: token
+                }
+            });
+        } catch (error) {
+            console.error("OAuth2 Token Generation Failed:", error.message);
+            throw new Error("MAILER_AUTH_FAILURE");
+        }
     }
 
     initStorage() {
@@ -65,13 +76,8 @@ class DispatchService {
     async processEmailDispatch(payload, uploadedFiles = []) {
         const { mode, docId, type, subject, message, recipients } = payload;
 
-        // Verify connection before starting heavy PDF work
-        try {
-            await this.transporter.verify();
-        } catch (err) {
-            console.error("Critical: Mail Transporter Offline:", err.message);
-            throw new Error("Email service is temporarily unavailable.");
-        }
+        // Initialize transporter with OAuth2
+        const transporter = await this.getTransporter();
 
         if (mode === 'single') {
             const modelMap = { 
@@ -95,7 +101,6 @@ class DispatchService {
             const fileName = `${type.toUpperCase()}_${shortId}.pdf`;
             const filePath = path.join(this.baseDir, folder, fileName);
 
-            // Generate PDF
             await this.generateAndStorePDF(doc, type, filePath);
 
             const attachments = [{
@@ -107,7 +112,7 @@ class DispatchService {
                 path: f.path 
             }))];
 
-            const info = await this.send(targetEmail, subject, message, type, doc, attachments);
+            const info = await this.send(transporter, targetEmail, subject, message, type, doc, attachments);
             this.cleanup(uploadedFiles);
             return info;
         }
@@ -118,8 +123,12 @@ class DispatchService {
             
             const results = [];
             for (const email of emailList) {
-                const result = await this.send(email, subject, message, 'BULK', null, attachments);
-                results.push(result);
+                try {
+                    const result = await this.send(transporter, email, subject, message, 'BULK', null, attachments);
+                    results.push({ email, status: 'sent', messageId: result.messageId });
+                } catch (err) {
+                    results.push({ email, status: 'failed', error: err.message });
+                }
             }
             
             this.cleanup(uploadedFiles);
@@ -146,7 +155,6 @@ class DispatchService {
         }];
         const totalSum = items.reduce((a, b) => a + (Number(b.total) || 0), 0);
 
-      
         const htmlContent = `
             <!DOCTYPE html>
             <html>
@@ -173,15 +181,12 @@ class DispatchService {
                         <div style="font-size: 10px; color: #94a3b8;">REF: ${shortId} | ${new Date().toLocaleDateString()}</div>
                     </div>
                 </div>
-
                 <div style="margin-top: 40px;">
                     <small style="color: #94a3b8; font-weight: bold;">ISSUED TO:</small>
                     <div style="font-weight: bold;">${clientName}</div>
                     <div style="font-size: 12px; color: #64748b;">${clientEmail}</div>
                 </div>
-
                 ${type === 'Receipt' ? `<div style="text-align: center; margin: 20px;"><div class="paid-stamp">PAID IN FULL</div></div>` : ''}
-
                 <table class="table">
                     <thead>
                         <tr><th>Description</th><th style="text-align: right;">Amount</th></tr>
@@ -195,7 +200,6 @@ class DispatchService {
                         `).join('')}
                     </tbody>
                 </table>
-
                 <div class="total-box">
                     <div style="font-size: 10px; opacity: 0.7;">TOTAL BALANCE</div>
                     <div style="font-size: 24px; font-weight: 900;">${doc.currency || 'KES'} ${totalSum.toLocaleString()}</div>
@@ -207,7 +211,6 @@ class DispatchService {
         const options = { 
             format: 'A4', 
             printBackground: true,
-            // Optimization for Linux/Render environments
             args: ['--no-sandbox', '--disable-setuid-sandbox'] 
         };
         
@@ -216,8 +219,8 @@ class DispatchService {
         fs.writeFileSync(targetPath, pdfBuffer);
     }
 
-    async send(to, subject, message, type, doc, attachments) {
-        return this.transporter.sendMail({
+    async send(transporter, to, subject, message, type, doc, attachments) {
+        return transporter.sendMail({
             from: `"SMA Finance Hub" <${process.env.SMTP_USER}>`,
             to,
             subject,

@@ -26,9 +26,23 @@ const app = express();
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(cookieParser());
+const allowedOrigins = [
+  process.env.FRONT_END_URL || "http://localhost:3000",
+  process.env.ADMIN_END_URL || "http://localhost:3001"
+];
+
 app.use(cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000', 
-    credentials: true 
+  origin: function(origin, callback) {
+    // allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true
 }));
 
 // --- 4. DATABASE CONNECTION ---

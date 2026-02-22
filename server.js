@@ -28,9 +28,9 @@ app.use(express.json());
 app.use(cookieParser());
 const allowedOrigins = [
   process.env.FRONT_END_URL || "http://localhost:3000",
-  process.env.ADMIN_END_URL || "http://localhost:3001"
+  process.env.ADMIN_END_URL || "http://localhost:3001",
+  "https://smacrm-5.onrender.com"
 ];
-
 app.use(cors({
   origin: function(origin, callback) {
     // allow requests with no origin (like mobile apps or Postman)
@@ -120,3 +120,5 @@ app.listen(PORT, () => {
   console.log(`\x1b[36m%s\x1b[0m`, `📡 CORE_LISTENING_ON: http://localhost:${PORT}`);
   console.log(`-------------------------------------------------`);
 });
+
+

@@ -28,7 +28,15 @@ router.post('/logout', authController.logout);
 router.post('/validate-token', authController.validateToken);
 router.get('/profile', authController.getProfile);
 router.put('/profile', authController.updateProfile);
-router.post('/profile/avatar', upload.single('avatar'), authController.uploadProfileAvatar);
+router.post('/profile/avatar', (req, res, next) => {
+  upload.single('avatar')(req, res, (err) => {
+    if (!err) return next();
+    return res.status(400).json({
+      success: false,
+      message: err.message || 'Failed to process avatar upload'
+    });
+  });
+}, authController.uploadProfileAvatar);
 router.post('/change-password', authController.changePassword);
 router.post('/presence', authController.updatePresence);
 

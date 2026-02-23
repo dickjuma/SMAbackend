@@ -34,6 +34,16 @@ const computeTotals = (payload = {}) => {
   };
 };
 
+const sanitizePayload = (payload = {}) => {
+  const safe = { ...(payload || {}) };
+  delete safe._id;
+  delete safe.__v;
+  delete safe.createdAt;
+  delete safe.updatedAt;
+  delete safe.clientDetails;
+  return safe;
+};
+
 const buildQuotationNumber = async () => {
   const count = await Quotation.countDocuments();
   return `QTN-${String(count + 1).padStart(6, '0')}`;
@@ -103,7 +113,7 @@ exports.getQuotationById = async (req, res) => {
 
 exports.createQuotation = async (req, res) => {
   try {
-    const payload = computeTotals(req.body || {});
+    const payload = computeTotals(sanitizePayload(req.body || {}));
     payload.status = normalizeStatus(payload.status);
     if (!payload.quotationNumber) payload.quotationNumber = await buildQuotationNumber();
 
@@ -121,7 +131,7 @@ exports.updateQuotation = async (req, res) => {
     const existing = await Quotation.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Quotation not found' });
 
-    const payload = computeTotals(req.body || {});
+    const payload = computeTotals(sanitizePayload(req.body || {}));
     payload.status = normalizeStatus(payload.status || existing.status);
     if (!payload.quotationNumber) {
       payload.quotationNumber = existing.quotationNumber || (await buildQuotationNumber());

@@ -40,6 +40,16 @@ const computeTotals = (payload = {}) => {
   };
 };
 
+const sanitizePayload = (payload = {}) => {
+  const safe = { ...(payload || {}) };
+  delete safe._id;
+  delete safe.__v;
+  delete safe.createdAt;
+  delete safe.updatedAt;
+  delete safe.clientDetails;
+  return safe;
+};
+
 const buildInvoiceNumber = async () => {
   const count = await Invoice.countDocuments();
   return `INV-${String(count + 1).padStart(6, '0')}`;
@@ -120,7 +130,7 @@ exports.getInvoiceById = async (req, res) => {
 
 exports.createInvoice = async (req, res) => {
   try {
-    const payload = computeTotals(req.body || {});
+    const payload = computeTotals(sanitizePayload(req.body || {}));
     payload.status = normalizeStatus(payload.status);
     if (!payload.invoiceNumber) {
       payload.invoiceNumber = await buildInvoiceNumber();
@@ -140,7 +150,7 @@ exports.updateInvoice = async (req, res) => {
     const existing = await Invoice.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: 'Invoice not found' });
 
-    const payload = computeTotals(req.body || {});
+    const payload = computeTotals(sanitizePayload(req.body || {}));
     payload.status = normalizeStatus(payload.status || existing.status);
     if (!payload.invoiceNumber) {
       payload.invoiceNumber = existing.invoiceNumber || (await buildInvoiceNumber());

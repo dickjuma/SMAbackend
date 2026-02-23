@@ -1,6 +1,14 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+const ROLE_ORDER = ['user', 'team_lead', 'manager', 'admin', 'superadmin'];
+
+const normalizeRole = (role) => String(role || '').trim().toLowerCase();
+const getRoleRank = (role) => {
+  const rank = ROLE_ORDER.indexOf(normalizeRole(role));
+  return rank < 0 ? 0 : rank;
+};
+
 /**
  * @desc    Verify if the user is logged in and the token is valid
  */
@@ -12,6 +20,7 @@ exports.protect = async (req, res, next) => {
     if (req.headers.authorization?.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
+    if (!token && req.cookies?.token) token = req.cookies.token;
 
     if (!token) {
       return res.status(401).json({ 
@@ -67,12 +76,28 @@ exports.protect = async (req, res, next) => {
  */
 exports.restrictTo = (...roles) => {
   return (req, res, next) => {
-    // Ensure req.user exists and role matches (case-insensitive check)
-    if (!req.user || !roles.includes(req.user.role.toLowerCase())) {
+    const allowed = roles.map(normalizeRole);
+    const userRole = normalizeRole(req.user?.role);
+    if (!req.user || !allowed.includes(userRole)) {
       return res.status(403).json({ 
         success: false, 
         code: 'AUTH_FORBIDDEN',
         message: "INSUFFICIENT_PRIVILEGE_LEVEL: Protocol Access Denied." 
+      });
+    }
+    next();
+  };
+};
+
+exports.restrictToMinRole = (minimumRole = 'user') => {
+  return (req, res, next) => {
+    const required = getRoleRank(minimumRole);
+    const actual = getRoleRank(req.user?.role);
+    if (!req.user || actual < required) {
+      return res.status(403).json({
+        success: false,
+        code: 'AUTH_FORBIDDEN',
+        message: `Minimum role required: ${minimumRole}`
       });
     }
     next();

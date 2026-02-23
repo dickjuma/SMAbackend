@@ -38,15 +38,71 @@ const sanitizeBody = (body = {}) => {
   return clone;
 };
 
-const formatActivityMessage = ({ actorName, actionType, module, targetId, targetName }) => {
-  const actor = actorName || 'System';
-  const action = actionType || 'other';
-  const moduleLabel = module || 'system';
-  const normalizedModule = moduleLabel.charAt(0).toUpperCase() + moduleLabel.slice(1);
+const moduleLabelMap = {
+  clients: 'client',
+  invoices: 'invoice',
+  quotations: 'quotation',
+  receipts: 'receipt',
+  users: 'user',
+  profile: 'profile',
+  settings: 'settings',
+  email: 'email',
+  finance: 'finance',
+  auth: 'authentication'
+};
 
-  if (targetName) return `${actor} - ${action} ${normalizedModule} for ${targetName}`;
-  if (targetId) return `${actor} - ${action} ${normalizedModule} #${targetId}`;
-  return `${actor} - ${action} ${normalizedModule}`;
+const actionLabelMap = {
+  create: 'created',
+  update: 'updated',
+  delete: 'deleted',
+  read: 'viewed',
+  auth: 'performed auth action',
+  presence: 'updated presence',
+  other: 'updated'
+};
+
+const normalizeTargetText = (targetName, targetId, module) => {
+  const label = moduleLabelMap[module] || module || 'record';
+  if (targetName) return `${label} (${targetName})`;
+  if (targetId) return `${label} #${targetId}`;
+  return label;
+};
+
+const formatFromDetails = ({ module, details = {}, targetName, targetId }) => {
+  const changedFields = Array.isArray(details.changedFields) ? details.changedFields : [];
+  const recipients = Array.isArray(details.recipients) ? details.recipients : [];
+  const recipient = details.recipient || recipients[0] || '';
+
+  if (module === 'clients' && changedFields.length > 0) {
+    return `updated details for ${normalizeTargetText(targetName, targetId, module)}`;
+  }
+  if (module === 'email' && recipient) {
+    return `sent email to ${recipient}`;
+  }
+  if ((module === 'invoices' || module === 'quotations' || module === 'receipts') && recipient) {
+    return `sent ${moduleLabelMap[module]} to ${recipient}`;
+  }
+  return '';
+};
+
+const formatActivityMessage = ({ actorName, actionType, module, targetId, targetName, action = '', details = {} }) => {
+  const actor = actorName || 'System';
+  const normalizedAction = String(action || '').trim();
+  if (normalizedAction) {
+    const prefixed = normalizedAction.toLowerCase().startsWith(actor.toLowerCase())
+      ? normalizedAction
+      : `${actor} ${normalizedAction}`;
+    return prefixed;
+  }
+
+  const type = actionType || 'other';
+  const moduleLabel = module || 'system';
+  const detailsText = formatFromDetails({ module: moduleLabel, details, targetName, targetId });
+  if (detailsText) return `${actor} ${detailsText}`;
+
+  const verb = actionLabelMap[type] || 'updated';
+  const targetText = normalizeTargetText(targetName, targetId, moduleLabel);
+  return `${actor} ${verb} ${targetText}`;
 };
 
 async function logActivity({
@@ -83,7 +139,9 @@ async function logActivity({
         actionType: resolvedActionType,
         module: resolvedModule,
         targetId,
-        targetName
+        targetName,
+        action: action || '',
+        details
       }),
       status: status === 'failed' ? 'failed' : 'success',
       details,
@@ -159,4 +217,3 @@ module.exports = {
   logActivity,
   createHttpActivityLogger
 };
-

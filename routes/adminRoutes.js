@@ -19,6 +19,8 @@ const getTimeAgo = (date) => {
 
 const normalizeLog = (log) => {
   const timestamp = log.createdAt || log.timestamp || new Date();
+  const severity = log.status === 'failed' ? 'high' : ['delete', 'auth'].includes(log.actionType) ? 'medium' : 'low';
+  const category = log.module || 'system';
   return {
     _id: log._id,
     id: log._id,
@@ -32,6 +34,8 @@ const normalizeLog = (log) => {
     targetName: log.targetName || '',
     targetId: log.targetId || '',
     message: log.message || log.action || 'Activity event',
+    severity,
+    category,
     status: log.status || 'success',
     details: log.details || {},
     timestamp,
@@ -69,10 +73,19 @@ router.get('/activity', async (req, res) => {
     ]);
 
     const normalized = rows.map(normalizeLog);
+    const summary = normalized.reduce(
+      (acc, row) => {
+        acc.total += 1;
+        acc[row.severity] = (acc[row.severity] || 0) + 1;
+        return acc;
+      },
+      { total: 0, high: 0, medium: 0, low: 0 }
+    );
     res.json({
       success: true,
       notifications: normalized,
       activities: normalized,
+      summary,
       pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) }
     });
   } catch (error) {

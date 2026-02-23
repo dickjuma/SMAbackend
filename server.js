@@ -9,7 +9,7 @@ const path = require('path');
 
 dotenv.config();
 
-const { protect, restrictTo } = require('./middleware/auth');
+const { protect, restrictTo, restrictToMinRole } = require('./middleware/auth');
 const { initializeRealtime } = require('./services/realtimeService');
 const { createHttpActivityLogger } = require('./services/activityLogService');
 
@@ -75,7 +75,7 @@ app.use('/api/invoices', protect, invoiceRoutes);
 app.use('/api/receipts', protect, receiptRoutes);
 app.use('/api/quotations', protect, quotationRoutes);
 app.use('/api/dashboard', protect, dashboardRoutes);
-app.use('/api/settings', protect, settingsRoutes);
+app.use('/api/settings', protect, restrictToMinRole('admin'), settingsRoutes);
 app.use('/api/products', protect, productRoutes);
 app.use('/api/users', protect, restrictTo('admin', 'superadmin'), userRoutes);
 app.use('/api/admin', protect, restrictTo('admin', 'superadmin'), adminRoutes);

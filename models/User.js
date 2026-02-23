@@ -1,16 +1,39 @@
 const mongoose = require('mongoose');
 
-const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true }, // Should be hashed
-  role: { 
-    type: String, 
-    enum: ['user', 'admin', 'superadmin'], 
-    default: 'user' 
-  },
-  active: { type: Boolean, default: true },
-  lastLogin: { type: Date }
-}, { timestamps: true });
+const userSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: { type: String, required: true, select: false },
+    role: {
+      type: String,
+      enum: ['user', 'team_lead', 'manager', 'admin', 'superadmin'],
+      default: 'user'
+    },
+    department: { type: String, default: 'Unassigned', trim: true },
+    phone: { type: String, default: '' },
+    address: { type: String, default: '' },
+    position: { type: String, default: '' },
+    location: { type: String, default: '' },
+    reportsTo: { type: String, default: '' },
+    projects: { type: Number, default: 0 },
+    skills: { type: [String], default: [] },
+    performance: { type: Number, default: 0 },
+    avatar: { type: String, default: '' },
 
-module.exports = mongoose.model('User', userSchema);
+    active: { type: Boolean, default: true },
+    onlineStatus: {
+      type: String,
+      enum: ['online', 'away', 'busy', 'offline'],
+      default: 'offline'
+    },
+    loginCount: { type: Number, default: 0 },
+    lastLogin: { type: Date },
+    lastSeen: { type: Date },
+
+    refreshToken: { type: String, default: null }
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

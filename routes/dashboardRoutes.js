@@ -1,29 +1,63 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-// We don't need a Receipt model because we use Invoice with a filter
-const Client = require("../models/client");
-const Quotation = require("../models/quotation");
-const Invoice = require("../models/invoice");
+const Client = require('../models/client');
+const Quotation = require('../models/quotation');
+const Invoice = require('../models/invoice');
+const User = require('../models/User');
 
-router.get("/stats", async (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
-    // We destructure 4 variables to match the 4 count requests
-    const [clients, quotations, invoices, receipts] = await Promise.all([
+    const [clients, quotations, invoices, receipts, userRows] = await Promise.all([
       Client.countDocuments({}),
       Quotation.countDocuments({}),
-      Invoice.countDocuments({}),                 // Total count
-      Invoice.countDocuments({ status: "Paid" }), // Filtered count for receipts ✅
+      Invoice.countDocuments({}),
+      Invoice.countDocuments({ status: 'Paid' }),
+      User.find().lean()
     ]);
 
-    res.json({
+    const online = userRows.filter((u) => (u.onlineStatus || 'offline') === 'online').length;
+    const active = userRows.filter((u) => !!u.active).length;
+
+    const deptMap = userRows.reduce((acc, u) => {
+      const d = u.department || 'Unassigned';
+      acc[d] = (acc[d] || 0) + 1;
+      return acc;
+    }, {});
+
+    const roleMap = userRows.reduce((acc, u) => {
+      const r = u.role || 'user';
+      acc[r] = (acc[r] || 0) + 1;
+      return acc;
+    }, {});
+
+    const productivity = userRows.length
+      ? Math.round(userRows.reduce((sum, u) => sum + (Number(u.performance) || 0), 0) / userRows.length)
+      : 0;
+
+    const engagement = userRows.length
+      ? Math.round(userRows.reduce((sum, u) => sum + Math.min(100, (Number(u.loginCount) || 0) * 5), 0) / userRows.length)
+      : 0;
+
+    const payload = {
       clients,
       quotations,
       invoices,
-      receipts
-    });
+      receipts,
+      stats: {
+        total: userRows.length,
+        online,
+        active,
+        departments: Object.entries(deptMap).map(([department, count]) => ({ department, count })),
+        roles: Object.entries(roleMap).map(([role, count]) => ({ role, count })),
+        productivity,
+        engagement
+      }
+    };
+
+    res.json(payload);
   } catch (error) {
-    console.error("Dashboard API Error:", error);
-    res.status(500).json({ error: "Failed to fetch ledger statistics" });
+    console.error('Dashboard API Error:', error);
+    res.status(500).json({ error: 'Failed to fetch ledger statistics' });
   }
 });
 

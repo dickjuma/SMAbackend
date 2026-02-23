@@ -1,0 +1,162 @@
+const ActivityLog = require('../models/ActivityLog');
+const { emitActivity } = require('./realtimeService');
+
+const methodToActionType = {
+  POST: 'create',
+  PUT: 'update',
+  PATCH: 'update',
+  DELETE: 'delete',
+  GET: 'read'
+};
+
+const methodToVerb = {
+  POST: 'created',
+  PUT: 'updated',
+  PATCH: 'updated',
+  DELETE: 'deleted',
+  GET: 'viewed'
+};
+
+const deriveModule = (path = '') => {
+  const segments = String(path || '').split('/').filter(Boolean);
+  const apiIdx = segments.indexOf('api');
+  if (apiIdx >= 0 && segments[apiIdx + 1]) return segments[apiIdx + 1];
+  return segments[0] || 'system';
+};
+
+const clip = (value, max = 180) => {
+  const str = String(value || '');
+  return str.length > max ? `${str.slice(0, max)}...` : str;
+};
+
+const sanitizeBody = (body = {}) => {
+  if (!body || typeof body !== 'object') return {};
+  const clone = { ...body };
+  ['password', 'currentPassword', 'newPassword', 'refreshToken', 'token'].forEach((k) => {
+    if (clone[k] !== undefined) clone[k] = '***';
+  });
+  return clone;
+};
+
+const formatActivityMessage = ({ actorName, actionType, module, targetId, targetName }) => {
+  const actor = actorName || 'System';
+  const action = actionType || 'other';
+  const moduleLabel = module || 'system';
+  const normalizedModule = moduleLabel.charAt(0).toUpperCase() + moduleLabel.slice(1);
+
+  if (targetName) return `${actor} - ${action} ${normalizedModule} for ${targetName}`;
+  if (targetId) return `${actor} - ${action} ${normalizedModule} #${targetId}`;
+  return `${actor} - ${action} ${normalizedModule}`;
+};
+
+async function logActivity({
+  req,
+  actor = null,
+  actorName = null,
+  action = '',
+  actionType = 'other',
+  module = null,
+  targetModel = '',
+  targetId = '',
+  targetName = '',
+  status = 'success',
+  details = {}
+} = {}) {
+  try {
+    const resolvedActor = actor || req?.user?._id || null;
+    const resolvedActorName = actorName || req?.user?.name || 'System';
+    const resolvedModule = module || deriveModule(req?.originalUrl || req?.url || '');
+    const resolvedActionType = actionType || methodToActionType[req?.method] || 'other';
+    const resolvedAction = action || `${methodToVerb[req?.method] || 'did'} ${resolvedModule}`;
+
+    const payload = await ActivityLog.create({
+      actor: resolvedActor,
+      actorName: resolvedActorName,
+      action: resolvedAction,
+      actionType: resolvedActionType,
+      module: resolvedModule,
+      targetModel,
+      targetId: String(targetId || ''),
+      targetName: String(targetName || ''),
+      message: formatActivityMessage({
+        actorName: resolvedActorName,
+        actionType: resolvedActionType,
+        module: resolvedModule,
+        targetId,
+        targetName
+      }),
+      status: status === 'failed' ? 'failed' : 'success',
+      details,
+      meta: {
+        method: req?.method || '',
+        path: req?.originalUrl || req?.url || '',
+        ip: req?.ip || '',
+        userAgent: clip(req?.headers?.['user-agent'] || '')
+      }
+    });
+
+    emitActivity({
+      _id: payload._id,
+      actor: payload.actor,
+      actorName: payload.actorName,
+      action: payload.action,
+      actionType: payload.actionType,
+      module: payload.module,
+      targetId: payload.targetId,
+      targetName: payload.targetName,
+      message: payload.message,
+      status: payload.status,
+      createdAt: payload.createdAt
+    });
+
+    return payload;
+  } catch (error) {
+    console.error('ACTIVITY_LOG_ERROR:', error.message);
+    return null;
+  }
+}
+
+function createHttpActivityLogger() {
+  return (req, res, next) => {
+    const method = String(req.method || '').toUpperCase();
+    const shouldTrack = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    if (!shouldTrack) return next();
+
+    const excludedPrefixes = ['/api/admin/activity', '/api/auth/refresh-token', '/api/auth/validate-token'];
+    if (excludedPrefixes.some((prefix) => String(req.originalUrl || '').startsWith(prefix))) return next();
+
+    const start = Date.now();
+    const bodySnapshot = sanitizeBody(req.body || {});
+
+    res.on('finish', () => {
+      const statusCode = Number(res.statusCode || 500);
+      if (!req.user) return;
+
+      const module = deriveModule(req.originalUrl || '');
+      const targetId = req.params?.id || req.body?.id || '';
+      const actionType = methodToActionType[method] || 'other';
+
+      logActivity({
+        req,
+        actionType,
+        module,
+        targetId,
+        status: statusCode >= 400 ? 'failed' : 'success',
+        details: {
+          statusCode,
+          durationMs: Date.now() - start,
+          changedFields: Object.keys(bodySnapshot || {}),
+          body: bodySnapshot
+        }
+      });
+    });
+
+    next();
+  };
+}
+
+module.exports = {
+  logActivity,
+  createHttpActivityLogger
+};
+

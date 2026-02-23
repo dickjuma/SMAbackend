@@ -45,6 +45,10 @@ exports.protect = async (req, res, next) => {
 
     // 4. Grant access to the next middleware
     req.user = user;
+    User.updateOne(
+      { _id: user._id },
+      { $set: { lastSeen: new Date(), onlineStatus: 'online' } }
+    ).catch(() => {});
     next();
   } catch (err) {
     // Handle JWT specific errors (like expiration)

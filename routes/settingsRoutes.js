@@ -50,23 +50,23 @@ const defaultAppSettings = {
   },
   documents: {
     invoice: {
-      title: 'INVOICE', companyName: 'SMA TECHNOLOGIES', tagline: 'Enterprise Resource Management',
-      addressLine1: '123 Business Street', addressLine2: 'Nairobi, Kenya', phone: '+254 719 832 719',
-      email: 'finance@smassystems.com', website: 'www.smacore.co.ke', taxIdLabel: 'KRA PIN',
+      title: 'INVOICE', companyName: '', tagline: 'Enterprise Resource Management',
+      addressLine1: '', addressLine2: '', phone: '',
+      email: '', website: '', taxIdLabel: 'KRA PIN',
       taxIdValue: '', footerNote: 'Thank you for your business!', logoUrl: '', prefix: 'INV',
       suffix: '', nextNumber: 1, paymentTermsDays: 30, defaultNotes: '', showLogo: true
     },
     quotation: {
-      title: 'QUOTATION', companyName: 'SMA TECHNOLOGIES', tagline: 'Enterprise Resource Management',
-      addressLine1: '123 Business Street', addressLine2: 'Nairobi, Kenya', phone: '+254 719 832 719',
-      email: 'finance@smassystems.com', website: 'www.smacore.co.ke', taxIdLabel: 'KRA PIN',
+      title: 'QUOTATION', companyName: '', tagline: 'Enterprise Resource Management',
+      addressLine1: '', addressLine2: '', phone: '',
+      email: '', website: '', taxIdLabel: 'KRA PIN',
       taxIdValue: '', footerNote: 'Thank you for your business!', logoUrl: '', prefix: 'QTN',
       suffix: '', nextNumber: 1, paymentTermsDays: 30, defaultNotes: '', showLogo: true
     },
     receipt: {
-      title: 'RECEIPT', companyName: 'SMA TECHNOLOGIES', tagline: 'Enterprise Resource Management',
-      addressLine1: '123 Business Street', addressLine2: 'Nairobi, Kenya', phone: '+254 719 832 719',
-      email: 'finance@smassystems.com', website: 'www.smacore.co.ke', taxIdLabel: 'KRA PIN',
+      title: 'RECEIPT', companyName: '', tagline: 'Enterprise Resource Management',
+      addressLine1: '', addressLine2: '', phone: '',
+      email: '', website: '', taxIdLabel: 'KRA PIN',
       taxIdValue: '', footerNote: 'Thank you for your business!', logoUrl: '', prefix: 'RCT',
       suffix: '', nextNumber: 1, paymentTermsDays: 30, defaultNotes: '', showLogo: true
     }

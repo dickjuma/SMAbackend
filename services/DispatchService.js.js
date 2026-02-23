@@ -10,6 +10,15 @@ const Quotation = require('../models/quotation');
 const Service = require('../models/service');
 const AppSettings = require('../models/AppSettings');
 
+const LEGACY_DOC_DEFAULTS = {
+  companyName: 'SMA TECHNOLOGIES',
+  addressLine1: '123 Business Street',
+  addressLine2: 'Nairobi, Kenya',
+  phone: '+254 719 832 719',
+  email: 'finance@smassystems.com',
+  website: 'www.smacore.co.ke'
+};
+
 class DispatchService {
   constructor() {
     this.baseDir = path.join(__dirname, '../../uploads');
@@ -88,6 +97,19 @@ class DispatchService {
     return `${currency || 'KES'} ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
 
+  normalizeText(value) {
+    return String(value ?? '').trim();
+  }
+
+  pickCompanyBacked(docValue, legacyDefault, companyValue, fallbackValue = '') {
+    const docText = this.normalizeText(docValue);
+    const legacyText = this.normalizeText(legacyDefault);
+    if (!docText || docText === legacyText) {
+      return companyValue ?? fallbackValue;
+    }
+    return docValue;
+  }
+
   getDocumentNumber(doc, type) {
     if (type === 'Invoice' || type === 'Receipt') return doc?.invoiceNumber || `INV-${String(doc?._id || '').slice(-6).toUpperCase()}`;
     if (type === 'Quotation') return doc?.quotationNumber || `QTN-${String(doc?._id || '').slice(-6).toUpperCase()}`;
@@ -119,13 +141,72 @@ class DispatchService {
       return {
         ...defaults,
         ...docSettings,
-        companyName: docSettings.companyName || company.legalName || defaults.companyName,
-        email: docSettings.email || company.supportEmail || defaults.email,
-        phone: docSettings.phone || company.supportPhone || defaults.phone,
-        website: docSettings.website || company.website || defaults.website,
-        addressLine1: docSettings.addressLine1 || company.addressLine1 || defaults.addressLine1,
-        addressLine2: docSettings.addressLine2 || company.addressLine2 || defaults.addressLine2,
-        taxIdValue: docSettings.taxIdValue || company.taxPin || defaults.taxIdValue
+        companyName: this.pickCompanyBacked(
+          docSettings.companyName,
+          LEGACY_DOC_DEFAULTS.companyName,
+          company.legalName,
+          defaults.companyName
+        ),
+        email: this.pickCompanyBacked(
+          docSettings.email,
+          LEGACY_DOC_DEFAULTS.email,
+          company.supportEmail,
+          defaults.email
+        ),
+        phone: this.pickCompanyBacked(
+          docSettings.phone,
+          LEGACY_DOC_DEFAULTS.phone,
+          company.supportPhone,
+          defaults.phone
+        ),
+        website: this.pickCompanyBacked(
+          docSettings.website,
+          LEGACY_DOC_DEFAULTS.website,
+          company.website,
+          defaults.website
+        ),
+        addressLine1: this.pickCompanyBacked(
+          docSettings.addressLine1,
+          LEGACY_DOC_DEFAULTS.addressLine1,
+          company.addressLine1,
+          defaults.addressLine1
+        ),
+        addressLine2: this.pickCompanyBacked(
+          docSettings.addressLine2,
+          LEGACY_DOC_DEFAULTS.addressLine2,
+          company.addressLine2,
+          defaults.addressLine2
+        ),
+        taxIdValue: this.normalizeText(docSettings.taxIdValue) || company.taxPin || defaults.taxIdValue
+      };
+    } catch (error) {
+      return defaults;
+    }
+  }
+
+  async getMailBranding() {
+    const defaults = {
+      companyName: 'SMA Systems',
+      fromName: 'SMA Systems',
+      supportEmail: 'finance@smassystems.com',
+      supportPhone: '+254 719 832 719',
+      website: 'smassystems.com',
+      replyTo: ''
+    };
+
+    try {
+      const settings = await AppSettings.findOne({ key: 'app' }).lean();
+      const data = settings?.data || {};
+      const company = data?.company || {};
+      const integrations = data?.integrations || {};
+      return {
+        ...defaults,
+        companyName: company.legalName || defaults.companyName,
+        fromName: integrations.smtpFromName || company.legalName || defaults.fromName,
+        supportEmail: company.supportEmail || defaults.supportEmail,
+        supportPhone: company.supportPhone || defaults.supportPhone,
+        website: company.website || defaults.website,
+        replyTo: integrations.smtpReplyTo || company.supportEmail || defaults.replyTo
       };
     } catch (error) {
       return defaults;
@@ -378,16 +459,18 @@ class DispatchService {
   }
 
   async send(to, subject, message, type, doc, attachments, envelope = {}) {
+    const mailBranding = await this.getMailBranding();
     const html = `<div style="font-family:sans-serif;background-color:#f8fafc;padding:40px;">
       <div style="max-width:600px;margin:0 auto;background:white;border-radius:16px;border:1px solid #e2e8f0;overflow:hidden;">
-        <div style="background:#0f172a;padding:20px;color:white;"><span style="font-weight:bold;letter-spacing:2px;">SMA_SYSTEMS</span></div>
+        <div style="background:#0f172a;padding:20px;color:white;"><span style="font-weight:bold;letter-spacing:2px;">${this.escapeHtml(mailBranding.companyName || 'SMA_SYSTEMS')}</span></div>
         <div style="padding:40px;"><p style="color:#334155;line-height:1.6;white-space:pre-wrap;">${message || ''}</p></div>
         <div style="padding:20px;background:#f1f5f9;font-size:10px;color:#94a3b8;text-align:center;">
-          CONFIDENTIAL | REF: ${doc ? doc._id : 'BATCH'} | ${new Date().getFullYear()}
+          CONFIDENTIAL | REF: ${doc ? doc._id : 'BATCH'} | ${new Date().getFullYear()}<br/>
+          ${this.escapeHtml(mailBranding.supportEmail || '')} ${mailBranding.supportPhone ? `| ${this.escapeHtml(mailBranding.supportPhone)}` : ''}
         </div>
       </div></div>`;
 
-    const from = process.env.EMAIL_FROM || `SMA Systems <${process.env.SMTP_USER}>`;
+    const from = process.env.EMAIL_FROM || `${mailBranding.fromName || 'SMA Systems'} <${process.env.SMTP_USER || mailBranding.supportEmail}>`;
 
     if (this.resend) {
       const resendAttachments = (attachments || []).map((a) => ({
@@ -400,6 +483,7 @@ class DispatchService {
         to: Array.isArray(to) ? to : [to],
         cc: Array.isArray(envelope.cc) && envelope.cc.length > 0 ? envelope.cc : undefined,
         bcc: Array.isArray(envelope.bcc) && envelope.bcc.length > 0 ? envelope.bcc : undefined,
+        reply_to: mailBranding.replyTo || undefined,
         subject: subject || 'SMA Dispatch',
         html,
         attachments: resendAttachments
@@ -414,6 +498,7 @@ class DispatchService {
       to,
       cc: Array.isArray(envelope.cc) && envelope.cc.length > 0 ? envelope.cc : undefined,
       bcc: Array.isArray(envelope.bcc) && envelope.bcc.length > 0 ? envelope.bcc : undefined,
+      replyTo: mailBranding.replyTo || undefined,
       subject: subject || 'SMA Dispatch',
       attachments,
       html

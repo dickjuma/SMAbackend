@@ -40,6 +40,7 @@ const allowedOrigins = [
   process.env.ADMIN_END_URL,
   'http://localhost:3000',
   'http://localhost:3001',
+  'https://crm.smassystems.com',
   'https://smacrm-5.onrender.com'
 ].filter(Boolean);
 
